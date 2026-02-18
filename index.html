@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบสรุปข้อมูลลูกค้า (Customer Insights)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #667eea;
+      --secondary: #764ba2;
+      --accent: #3498db;
+      --bg: #f5f7fa;
+      --text: #2d3436;
+      --white: #ffffff;
+    }
+
+    body { font-family: 'Sarabun', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
+    
+    .container { 
+      max-width: 1400px; margin: 0 auto; background: var(--white); 
+      padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+    }
+
+    h2 { text-align: center; margin-bottom: 30px; color: var(--secondary); font-weight: 600; font-size: 2em; }
+
+    /* Upload Section */
+    .upload-section { 
+      background: #f8f9fa; border: 2px dashed #cbd5e0; 
+      padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 30px;
+      transition: all 0.3s;
+    }
+    .upload-section:hover { border-color: var(--primary); background: #f0f4ff; }
+    input[type="file"] { cursor: pointer; font-size: 1rem; }
+
+    /* Controls */
+    .controls { 
+      display: flex; flex-wrap: wrap; gap: 15px; align-items: center; 
+      background: #fff; padding: 20px; border-radius: 12px; 
+      border: 1px solid #e2e8f0; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    .input-group { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.95rem; }
+    .controls input[type="date"], .controls input[type="text"] { 
+      padding: 10px 14px; border: 1px solid #cbd5e0; border-radius: 8px; outline: none; transition: 0.2s; font-family: inherit;
+    }
+    .controls input[type="text"] { width: 200px; }
+    .controls input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+    
+    /* Highlight Specific Item Input */
+    #itemSpecificInput { border-color: var(--accent); background: #f0f9ff; }
+
+    button { 
+      padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; 
+      font-weight: 600; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; gap: 6px;
+    }
+    #filterBtn { background: var(--accent); color: white; }
+    #filterBtn:hover { background: #2980b9; transform: translateY(-1px); }
+    #clearFilterBtn { background: #e2e8f0; color: #4a5568; }
+    #clearFilterBtn:hover { background: #cbd5e0; }
+    #exportBtn { background: #10b981; color: white; margin-left: auto; }
+    #exportBtn:hover { background: #059669; transform: translateY(-1px); }
+
+    /* Summary Cards */
+    .summary-section { 
+      display: none; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 30px; 
+    }
+    .summary-card { 
+      background: linear-gradient(135deg, var(--primary), var(--secondary)); 
+      color: white; padding: 20px; border-radius: 12px; 
+      text-align: center; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.2); 
+    }
+    .summary-card h3 { margin: 0 0 10px; font-size: 1rem; opacity: 0.9; font-weight: 400; }
+    .summary-card .value { font-size: 2rem; font-weight: 700; margin: 0; }
+
+    /* Table */
+    .table-container { 
+      display: none; overflow-x: auto; border-radius: 12px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;
+    }
+    table { width: 100%; border-collapse: collapse; background: white; min-width: 1000px; }
+    th, td { padding: 14px 18px; border-bottom: 1px solid #edf2f7; text-align: left; vertical-align: middle; font-size: 0.95rem; }
+    th { 
+      background: #f8fafc; color: #4a5568; font-weight: 700; text-transform: uppercase; 
+      font-size: 0.85rem; letter-spacing: 0.5px; position: sticky; top: 0; cursor: pointer; 
+    }
+    th:hover { background: #edf2f7; }
+    tr:hover { background-color: #f7fafc; }
+    
+    /* Column Specifics */
+    .col-number { font-variant-numeric: tabular-nums; text-align: right; }
+    .col-phone { font-family: 'Courier New', monospace; color: var(--accent); font-weight: 600; white-space: nowrap; }
+    .col-date { color: #805ad5; white-space: nowrap; font-size: 0.9rem; }
+    .badge-no-phone { color: #e53e3e; font-size: 0.85rem; font-style: italic; opacity: 0.7; }
+
+    /* Loading Overlay */
+    .loader-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.8); z-index: 999; justify-content: center; align-items: center; flex-direction: column;
+    }
+    .spinner {
+      width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--secondary);
+      border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Sort Icons */
+    th.sort-asc::after { content: ' ▲'; font-size: 0.8em; color: var(--primary); }
+    th.sort-desc::after { content: ' ▼'; font-size: 0.8em; color: var(--primary); }
+  </style>
+</head>
+<body>
+
+  <div id="loading" class="loader-overlay">
+    <div class="spinner"></div>
+    <div style="font-weight: 600; color: #555;">กำลังประมวลผลข้อมูล...</div>
+  </div>
+
+  <div class="container">
+    <h2>📊 ระบบสรุปข้อมูลลูกค้า (Customer Insights)</h2>
+    
+    <div class="upload-section">
+      <input type="file" id="fileInput" accept=".xlsx" />
+      <p style="margin-top: 10px; color: #718096; font-size: 0.9rem;">รองรับไฟล์ .xlsx เท่านั้น</p>
+    </div>
+
+    <div class="controls">
+      <div class="input-group">
+        <label>📅 จาก:</label> <input type="date" id="fromDate" />
+      </div>
+      <div class="input-group">
+        <label>ถึง:</label> <input type="date" id="toDate" />
+      </div>
+
+      <div class="input-group">
+        <input type="text" id="itemSpecificInput" placeholder="💊 เจาะจงชื่อรายการสินค้า..." />
+      </div>
+      
+      <div class="input-group" style="flex-grow: 1;">
+        <input type="text" id="globalSearch" placeholder="🔍 ค้นหา (ชื่อลูกค้า, HN, เบอร์)..." style="width: 100%;" />
+      </div>
+
+      <button id="filterBtn">ประมวลผล / กรอง</button>
+      <button id="clearFilterBtn">ล้างค่า</button>
+      <button id="exportBtn">📥 Export Excel</button>
+    </div>
+
+    <div id="summarySection" class="summary-section">
+      <div class="summary-card"><h3>👥 จำนวนลูกค้า (Unique)</h3><p class="value" id="totalCustomers">-</p></div>
+      <div class="summary-card"><h3>🛒 จำนวนรายการซื้อ</h3><p class="value" id="totalPurchases">-</p></div>
+      <div class="summary-card"><h3>📞 มีเบอร์โทรศัพท์</h3><p class="value" id="customersWithPhone">-</p></div>
+      <div class="summary-card"><h3>💰 ยอดชำระรวม</h3><p class="value" id="grandTotalPayment">-</p></div>
+    </div>
+
+    <div class="table-container" id="tableContainer">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th data-key="hn">HN</th>
+            <th data-key="name">ชื่อลูกค้า</th>
+            <th data-key="phone">เบอร์โทรศัพท์</th>
+            <th data-key="items">ประวัติรายการ (ที่เลือก)</th>
+            <th data-key="itemCount" class="col-number">จำนวน</th>
+            <th data-key="totalPayment" class="col-number">ยอดรวม (บาท)</th>
+            <th data-key="lastDate">วันที่ใช้บริการ</th>
+            <th data-key="visitCount" class="col-number">ครั้งที่เข้า</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let rawRowsGlobal = []; // เก็บข้อมูลดิบทั้งหมด
+    let colMapping = {};    // เก็บการจับคู่คอลัมน์
+    let processedData = []; // ข้อมูลที่ผ่านการสรุปแล้ว
+
+    // DOM Elements
+    const els = {
+      fileInput: document.getElementById('fileInput'),
+      filterBtn: document.getElementById('filterBtn'),
+      clearBtn: document.getElementById('clearFilterBtn'),
+      exportBtn: document.getElementById('exportBtn'),
+      globalSearch: document.getElementById('globalSearch'),
+      itemSpecificInput: document.getElementById('itemSpecificInput'), // ใหม่
+      fromDate: document.getElementById('fromDate'),
+      toDate: document.getElementById('toDate'),
+      loading: document.getElementById('loading'),
+      summary: document.getElementById('summarySection'),
+      tableCont: document.getElementById('tableContainer'),
+      tbody: document.querySelector('#resultTable tbody')
+    };
+
+    // Event Listeners
+    els.fileInput.addEventListener('change', handleFile);
+    els.filterBtn.addEventListener('click', () => runAggregation());
+    els.clearBtn.addEventListener('click', clearFilters);
+    els.exportBtn.addEventListener('click', exportToExcel);
+    
+    // Enter key triggers
+    els.globalSearch.addEventListener('keyup', (e) => { if(e.key === 'Enter') runAggregation(); });
+    els.itemSpecificInput.addEventListener('keyup', (e) => { if(e.key === 'Enter') runAggregation(); });
+
+    const toggleLoader = (show) => els.loading.style.display = show ? 'flex' : 'none';
+
+    // Helper functions
+    function parseExcelDate(dr) {
+      if (!dr) return null;
+      if (dr instanceof Date) return dr;
+      const str = dr.toString().trim();
+      const parts = str.split('/');
+      if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+      return new Date(str);
+    }
+    function formatAD(date) {
+      if (!date || isNaN(date)) return '-';
+      return new Date(date).toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+    const formatNum = (n) => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function normalizePhoneNumber(p) {
+      if (!p) return '';
+      let n = String(p).replace(/\D/g,'');
+      if (n.startsWith('66')) n = '0' + n.slice(2);
+      if (n.length === 11 && n.startsWith('0')) return n; 
+      if (n.length === 10 && n.startsWith('0')) return `${n.substring(0,3)}-${n.substring(3,6)}-${n.substring(6,10)}`;
+      return n;
+    }
+
+    function handleFile(e) {
+      const file = e.target.files[0]; if (!file) return;
+      toggleLoader(true);
+      setTimeout(() => {
+        const reader = new FileReader();
+        reader.onload = evt => {
+          try {
+            const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array', cellDates: true });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            // เก็บข้อมูลดิบเข้าตัวแปร Global
+            rawRowsGlobal = XLSX.utils.sheet_to_json(ws, { raw: true, defval: '' });
+            identifyColumns(rawRowsGlobal);
+            runAggregation(); // ประมวลผลครั้งแรก
+          } catch (err) {
+            alert('เกิดข้อผิดพลาด: ' + err.message);
+          } finally {
+            toggleLoader(false);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }, 100);
+    }
+
+    function identifyColumns(rows) {
+      if (!rows.length) return;
+      const headers = Object.keys(rows[0]).map(h => h.trim());
+      const findKey = names => headers.find(h => names.some(n => h.toLowerCase().includes(n)));
+      
+      colMapping = {
+        hn: findKey(['hn','id','รหัส']),
+        name: findKey(['ชื่อ-นามสกุล','ชื่อ-สกุล','ชื่อ','ลูกค้า']),
+        phone: findKey(['โทร','phone','เบอร์']),
+        items: findKey(['รายการ','menu','item']),
+        date: findKey(['วันที่','date','วัน','ล่าสุด']),
+        payment: findKey(['ยอดชำระ','ยอดรวม','ราคา','price','total','amount']) 
+      };
+
+      if (!colMapping.hn) alert('⚠️ คำเตือน: ไม่พบคอลัมน์ HN/รหัสลูกค้า โปรดตรวจสอบไฟล์');
+    }
+
+    function runAggregation() {
+      if (!rawRowsGlobal.length) return;
+      toggleLoader(true);
+
+      setTimeout(() => {
+        const C = colMapping;
+        const fromDate = els.fromDate.value ? new Date(els.fromDate.value) : null;
+        const toDate = els.toDate.value ? new Date(els.toDate.value) : null;
+        if (fromDate) fromDate.setHours(0,0,0,0);
+        if (toDate) toDate.setHours(23,59,59,999);
+
+        const specificItem = els.itemSpecificInput.value.trim().toLowerCase();
+        const globalKw = els.globalSearch.value.trim().toLowerCase();
+
+        const map = {};
+
+        rawRowsGlobal.forEach(r => {
+            // 1. ตรวจสอบ Date Filter ก่อน (ถ้ามี)
+            const d = parseExcelDate(r[C.date]);
+            if (fromDate && d < fromDate) return;
+            if (toDate && d > toDate) return;
+
+            // 2. ตรวจสอบ "Specific Item Filter" (สำคัญมาก)
+            const rawItemName = (r[C.items] || '').toString();
+            if (specificItem && !rawItemName.toLowerCase().includes(specificItem)) {
+                return; // ข้ามแถวนี้ถ้าไม่เจอรายการที่ระบุ
+            }
+
+            // --- เริ่มการ Grouping ---
+            const id = (r[C.hn] || '').toString().trim();
+            if (!id) return;
+
+            if (!map[id]) {
+                map[id] = { 
+                    name: r[C.name] || 'ไม่ระบุชื่อ', 
+                    phone: '', 
+                    items: new Set(), 
+                    lastDate: null, 
+                    visitCount: 0, 
+                    totalPayment: 0 
+                };
+            }
+            const o = map[id];
+
+            // อัปเดตเบอร์โทร (เอาเบอร์ที่ดีที่สุด)
+            const ph = normalizePhoneNumber(r[C.phone]);
+            if (ph && !o.phone) o.phone = ph;
+
+            // เก็บรายการสินค้า
+            if (rawItemName.trim()) o.items.add(rawItemName.trim());
+
+            // นับจำนวนและยอดเงิน (เฉพาะแถวที่ผ่าน Filter ข้างบนมาแล้ว)
+            o.visitCount++;
+            
+            const rawPay = String(r[C.payment] || '0').replace(/,/g, '');
+            const payVal = parseFloat(rawPay);
+            if (!isNaN(payVal)) o.totalPayment += payVal;
+
+            // วันที่ล่าสุด
+            if (d && !isNaN(d)) {
+                if (!o.lastDate || d > o.lastDate) o.lastDate = d;
+            }
+        });
+
+        // แปลงเป็น Array เพื่อแสดงผล
+        let arr = Object.entries(map).map(([hn, o]) => ({
+            hn: hn,
+            name: o.name,
+            phone: o.phone,
+            phoneDisplay: o.phone || '-',
+            items: Array.from(o.items).join(', '),
+            itemCount: o.items.size,
+            lastDateObj: o.lastDate || new Date(0),
+            lastDateDisplay: formatAD(o.lastDate),
+            visitCount: o.visitCount,
+            hasPhone: !!o.phone,
+            totalPayment: o.totalPayment
+        }));
+
+        // 3. Apply Global Search (กรองชื่อลูกค้า หรือ HN หลังจากคำนวณยอดเสร็จแล้ว)
+        if (globalKw) {
+            arr = arr.filter(r => 
+                r.name.toLowerCase().includes(globalKw) ||
+                r.hn.toLowerCase().includes(globalKw) ||
+                r.phone.includes(globalKw)
+            );
+        }
+
+        // เรียงลำดับตามวันที่ล่าสุดเป็นค่าเริ่มต้น
+        arr.sort((a,b) => b.lastDateObj - a.lastDateObj);
+
+        processedData = arr;
+        updateUI();
+        toggleLoader(false);
+
+      }, 50); // Timeout เล็กน้อยเพื่อให้ Loader ขึ้น
+    }
+
+    function updateUI() {
+      els.summary.style.display = 'grid';
+      els.tableCont.style.display = 'block';
+
+      document.getElementById('totalCustomers').textContent = processedData.length.toLocaleString();
+      // จำนวนรายการนับจาก visitCount แทน เพื่อสะท้อนจำนวนครั้งที่ซื้อสินค้าที่เลือก
+      document.getElementById('totalPurchases').textContent = processedData.reduce((s, r) => s + r.visitCount, 0).toLocaleString();
+      document.getElementById('customersWithPhone').textContent = processedData.filter(r => r.hasPhone).length.toLocaleString();
+      document.getElementById('grandTotalPayment').textContent = formatNum(processedData.reduce((s, r) => s + r.totalPayment, 0));
+
+      renderTable(processedData);
+    }
+
+    function renderTable(arr) {
+      els.tbody.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      
+      // Limit การแสดงผลเบื้องต้นที่ 500 แถวเพื่อประสิทธิภาพ (ถ้าข้อมูลเยอะมาก)
+      const displayArr = arr.slice(0, 1000); 
+
+      displayArr.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${r.hn}</td>
+          <td>${r.name}</td>
+          <td class="${r.hasPhone ? 'col-phone' : 'badge-no-phone'}">${r.phoneDisplay}</td>
+          <td title="${r.items}">${truncate(r.items, 40)}</td>
+          <td class="col-number">${r.itemCount}</td>
+          <td class="col-number" style="font-weight:600; color:${els.itemSpecificInput.value ? '#e67e22' : '#2d3436'}">${formatNum(r.totalPayment)}</td>
+          <td class="col-date">${r.lastDateDisplay}</td>
+          <td class="col-number">${r.visitCount}</td>
+        `;
+        fragment.appendChild(tr);
+      });
+      els.tbody.appendChild(fragment);
+      enableSorting();
+    }
+
+    function truncate(str, n) { return (str.length > n) ? str.substr(0, n-1) + '...' : str; }
+
+    function clearFilters() {
+      els.fromDate.value = '';
+      els.toDate.value = '';
+      els.globalSearch.value = '';
+      els.itemSpecificInput.value = '';
+      runAggregation();
+    }
+
+    function enableSorting() {
+      document.querySelectorAll('#resultTable th[data-key]').forEach(th => {
+        const newTh = th.cloneNode(true);
+        th.parentNode.replaceChild(newTh, th);
+        newTh.onclick = () => {
+            const key = newTh.dataset.key;
+            const asc = !newTh.classList.contains('sort-asc');
+            document.querySelectorAll('th').forEach(h => h.classList.remove('sort-asc','sort-desc'));
+            newTh.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+            processedData.sort((a,b) => {
+                let valA = a[key], valB = b[key];
+                if (key === 'lastDate') { valA = a.lastDateObj; valB = b.lastDateObj; }
+                if (['itemCount','visitCount','totalPayment','lastDate'].includes(key)) return asc ? valA - valB : valB - valA;
+                return asc ? String(valA).localeCompare(String(valB),'th') : String(valB).localeCompare(String(valA),'th');
+            });
+            renderTable(processedData);
+        };
+      });
+    }
+
+    function exportToExcel() {
+      if (!processedData.length) { alert('ไม่มีข้อมูลสำหรับส่งออก'); return; }
+      toggleLoader(true);
+      setTimeout(() => {
+        const exportData = processedData.map((r, i) => ({
+            'ลำดับ': i + 1,
+            'HN': r.hn,
+            'ชื่อลูกค้า': r.name,
+            'เบอร์โทรศัพท์': r.phoneDisplay,
+            'รายการสินค้า': r.items,
+            'จำนวนสินค้า (Unique)': r.itemCount,
+            'ยอดชำระรวม (บาท)': r.totalPayment,
+            'วันที่ใช้บริการล่าสุด': r.lastDateDisplay,
+            'จำนวนครั้ง': r.visitCount
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        ws['!cols'] = [{wch:8}, {wch:15}, {wch:25}, {wch:15}, {wch:50}, {wch:10}, {wch:15}, {wch:15}, {wch:10}];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Data');
+        XLSX.writeFile(wb, `Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        toggleLoader(false);
+      }, 100);
+    }
+  </script>
+</body>
+</html>
